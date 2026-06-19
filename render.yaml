@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: anyrouter-render-bridge
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: UPSTREAM_HOST
+        value: anyrouter.top
+      - key: UPSTREAM_IP
+        value: 47.246.23.200
