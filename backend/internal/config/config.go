@@ -608,6 +608,8 @@ type PricingConfig struct {
 	UpdateIntervalHours int `mapstructure:"update_interval_hours"`
 	// 哈希校验间隔（分钟）
 	HashCheckIntervalMinutes int `mapstructure:"hash_check_interval_minutes"`
+	// OpenAI GPT 基础价格加价系数（不影响分组倍率）
+	OpenAIMarkupMultiplier float64 `mapstructure:"openai_markup_multiplier"`
 }
 
 type ServerConfig struct {
@@ -1999,6 +2001,7 @@ func setDefaults() {
 	viper.SetDefault("pricing.fallback_file", "./resources/model-pricing/model_prices_and_context_window.json")
 	viper.SetDefault("pricing.update_interval_hours", 24)
 	viper.SetDefault("pricing.hash_check_interval_minutes", 10)
+	viper.SetDefault("pricing.openai_markup_multiplier", 1.875)
 
 	// Timezone (default to Asia/Shanghai for Chinese users)
 	viper.SetDefault("timezone", "Asia/Shanghai")

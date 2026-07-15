@@ -1054,6 +1054,9 @@ pricing:
   # Hash check interval in minutes
   # 哈希检查间隔（分钟）
   hash_check_interval_minutes: 10
+  # OpenAI GPT base-price markup; group rate multipliers remain unchanged
+  # OpenAI GPT 基础价格加价系数；不会修改分组倍率
+  openai_markup_multiplier: 1.875
 
 # =============================================================================
 # Billing Configuration

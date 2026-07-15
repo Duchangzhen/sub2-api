@@ -46,6 +46,34 @@ func TestParsePricingData_ParsesPriorityAndServiceTierFields(t *testing.T) {
 	require.True(t, pricing.SupportsServiceTier)
 }
 
+func TestParsePricingData_AppliesOpenAIMarkupOnlyToGPT(t *testing.T) {
+	svc := &PricingService{cfg: &config.Config{Pricing: config.PricingConfig{
+		OpenAIMarkupMultiplier: 1.875,
+	}}}
+	body := []byte(`{
+		"gpt-5.5": {
+			"input_cost_per_token": 0.000005,
+			"output_cost_per_token": 0.00003,
+			"cache_read_input_token_cost": 0.0000005,
+			"output_cost_per_image_token": 0.00003
+		},
+		"claude-sonnet-4-6": {
+			"input_cost_per_token": 0.000005,
+			"output_cost_per_token": 0.00003,
+			"cache_read_input_token_cost": 0.0000005
+		}
+	}`)
+
+	data, err := svc.parsePricingData(body)
+	require.NoError(t, err)
+	require.InDelta(t, 0.000009375, data["gpt-5.5"].InputCostPerToken, 1e-12)
+	require.InDelta(t, 0.00005625, data["gpt-5.5"].OutputCostPerToken, 1e-12)
+	require.InDelta(t, 0.0000009375, data["gpt-5.5"].CacheReadInputTokenCost, 1e-12)
+	require.InDelta(t, 0.00005625, data["gpt-5.5"].OutputCostPerImageToken, 1e-12)
+	require.InDelta(t, 0.000005, data["claude-sonnet-4-6"].InputCostPerToken, 1e-12)
+	require.InDelta(t, 0.00003, data["claude-sonnet-4-6"].OutputCostPerToken, 1e-12)
+}
+
 func TestBillingService_GPT56CacheWritePricingUsesOfficialMultiplier(t *testing.T) {
 	tests := []struct {
 		model             string

@@ -490,6 +490,8 @@ func (s *PricingService) parsePricingData(body []byte) (map[string]*LiteLLMModel
 			pricing.OutputCostPerImageToken = *entry.OutputCostPerImageToken
 		}
 
+		s.applyOpenAIMarkup(modelName, pricing)
+
 		result[modelName] = pricing
 	}
 
@@ -502,6 +504,32 @@ func (s *PricingService) parsePricingData(body []byte) (map[string]*LiteLLMModel
 	}
 
 	return result, nil
+}
+
+func (s *PricingService) applyOpenAIMarkup(modelName string, pricing *LiteLLMModelPricing) {
+	if pricing == nil || !strings.HasPrefix(strings.ToLower(strings.TrimSpace(modelName)), "gpt-") {
+		return
+	}
+
+	multiplier := 1.0
+	if s != nil && s.cfg != nil && s.cfg.Pricing.OpenAIMarkupMultiplier > 0 {
+		multiplier = s.cfg.Pricing.OpenAIMarkupMultiplier
+	}
+	if multiplier == 1 {
+		return
+	}
+
+	pricing.InputCostPerToken *= multiplier
+	pricing.InputCostPerTokenPriority *= multiplier
+	pricing.OutputCostPerToken *= multiplier
+	pricing.OutputCostPerTokenPriority *= multiplier
+	pricing.CacheCreationInputTokenCost *= multiplier
+	pricing.CacheCreationInputTokenCostPriority *= multiplier
+	pricing.CacheCreationInputTokenCostAbove1hr *= multiplier
+	pricing.CacheReadInputTokenCost *= multiplier
+	pricing.CacheReadInputTokenCostPriority *= multiplier
+	pricing.OutputCostPerImage *= multiplier
+	pricing.OutputCostPerImageToken *= multiplier
 }
 
 // loadPricingData 从本地文件加载价格数据
