@@ -110,3 +110,38 @@ func TestBuildDatabaseConnectionDSNsUsesPostgresForBootstrap(t *testing.T) {
 		t.Fatalf("target DSN = %q, want configured database", targetDSN)
 	}
 }
+
+func TestRedisConfigURLMethods(t *testing.T) {
+	cfg := &RedisConfig{
+		Host: "rediss://default:secret@redis.example.com:6380/2",
+		Port: 6379,
+	}
+
+	if got := cfg.Address(); got != "redis.example.com:6380" {
+		t.Fatalf("Address() = %q, want redis.example.com:6380", got)
+	}
+	if got := cfg.PasswordValue(); got != "secret" {
+		t.Fatalf("PasswordValue() = %q, want secret", got)
+	}
+	if got := cfg.DatabaseIndex(); got != 2 {
+		t.Fatalf("DatabaseIndex() = %d, want 2", got)
+	}
+	if !cfg.TLSEnabled() {
+		t.Fatal("TLSEnabled() = false, want true")
+	}
+	if got := cfg.TLSServerName(); got != "redis.example.com" {
+		t.Fatalf("TLSServerName() = %q, want redis.example.com", got)
+	}
+}
+
+func TestAutoSetupRequireRedis(t *testing.T) {
+	t.Setenv("AUTO_SETUP_REQUIRE_REDIS", "")
+	if AutoSetupRequireRedis() {
+		t.Fatal("AutoSetupRequireRedis() = true for empty env")
+	}
+
+	t.Setenv("AUTO_SETUP_REQUIRE_REDIS", "true")
+	if !AutoSetupRequireRedis() {
+		t.Fatal("AutoSetupRequireRedis() = false for true env")
+	}
+}
