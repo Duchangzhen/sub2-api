@@ -66,3 +66,26 @@ func TestAuthRoutesRateLimitFailCloseWhenRedisUnavailable(t *testing.T) {
 		require.Contains(t, w.Body.String(), "rate limit exceeded", "path=%s", path)
 	}
 }
+
+func TestAuthLoginDoesNotDependOnRedisRateLimiter(t *testing.T) {
+	rdb := redis.NewClient(&redis.Options{
+		Addr:         "127.0.0.1:1",
+		DialTimeout:  50 * time.Millisecond,
+		ReadTimeout:  50 * time.Millisecond,
+		WriteTimeout: 50 * time.Millisecond,
+	})
+	t.Cleanup(func() {
+		_ = rdb.Close()
+	})
+
+	router := newAuthRoutesTestRouter(rdb)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.RemoteAddr = "203.0.113.10:12345"
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	require.NotEqual(t, http.StatusTooManyRequests, w.Code)
+	require.Equal(t, http.StatusBadRequest, w.Code)
+}
