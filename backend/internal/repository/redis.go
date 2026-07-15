@@ -33,8 +33,8 @@ func InitRedis(cfg *config.Config) *redis.Client {
 func buildRedisOptions(cfg *config.Config) *redis.Options {
 	opts := &redis.Options{
 		Addr:         cfg.Redis.Address(),
-		Password:     cfg.Redis.Password,
-		DB:           cfg.Redis.DB,
+		Password:     cfg.Redis.PasswordValue(),
+		DB:           cfg.Redis.DatabaseIndex(),
 		DialTimeout:  time.Duration(cfg.Redis.DialTimeoutSeconds) * time.Second,  // 建连超时
 		ReadTimeout:  time.Duration(cfg.Redis.ReadTimeoutSeconds) * time.Second,  // 读取超时
 		WriteTimeout: time.Duration(cfg.Redis.WriteTimeoutSeconds) * time.Second, // 写入超时
@@ -42,10 +42,10 @@ func buildRedisOptions(cfg *config.Config) *redis.Options {
 		MinIdleConns: cfg.Redis.MinIdleConns,                                     // 最小空闲连接
 	}
 
-	if cfg.Redis.EnableTLS {
+	if cfg.Redis.TLSEnabled() {
 		opts.TLSConfig = &tls.Config{
 			MinVersion: tls.VersionTLS12,
-			ServerName: cfg.Redis.Host,
+			ServerName: cfg.Redis.TLSServerName(),
 		}
 	}
 

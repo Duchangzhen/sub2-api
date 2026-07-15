@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -1224,17 +1225,32 @@ type DatabaseConfig struct {
 	UserPlatformQuotaFlushBatchSize int `mapstructure:"user_platform_quota_flush_batch_size"`
 }
 
+// NormalizeDatabaseHost forces Neon pooled endpoints onto their direct endpoint.
+// lib/pq uses unnamed prepared statements that are not reliable with Neon's
+// transaction pooler, which otherwise causes intermittent query failures.
+func NormalizeDatabaseHost(host string) string {
+	host = strings.TrimSpace(host)
+	lowerHost := strings.ToLower(host)
+	if strings.HasSuffix(lowerHost, ".neon.tech") {
+		if i := strings.LastIndex(lowerHost, "-pooler."); i >= 0 {
+			return host[:i] + host[i+len("-pooler"):]
+		}
+	}
+	return host
+}
+
 func (d *DatabaseConfig) DSN() string {
+	host := NormalizeDatabaseHost(d.Host)
 	// 当密码为空时不包含 password 参数，避免 libpq 解析错误
 	if d.Password == "" {
 		return fmt.Sprintf(
 			"host=%s port=%d user=%s dbname=%s sslmode=%s",
-			d.Host, d.Port, d.User, d.DBName, d.SSLMode,
+			host, d.Port, d.User, d.DBName, d.SSLMode,
 		)
 	}
 	return fmt.Sprintf(
 		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
-		d.Host, d.Port, d.User, d.Password, d.DBName, d.SSLMode,
+		host, d.Port, d.User, d.Password, d.DBName, d.SSLMode,
 	)
 }
 
@@ -1243,16 +1259,17 @@ func (d *DatabaseConfig) DSNWithTimezone(tz string) string {
 	if tz == "" {
 		tz = "Asia/Shanghai"
 	}
+	host := NormalizeDatabaseHost(d.Host)
 	// 当密码为空时不包含 password 参数，避免 libpq 解析错误
 	if d.Password == "" {
 		return fmt.Sprintf(
 			"host=%s port=%d user=%s dbname=%s sslmode=%s TimeZone=%s",
-			d.Host, d.Port, d.User, d.DBName, d.SSLMode, tz,
+			host, d.Port, d.User, d.DBName, d.SSLMode, tz,
 		)
 	}
 	return fmt.Sprintf(
 		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s TimeZone=%s",
-		d.Host, d.Port, d.User, d.Password, d.DBName, d.SSLMode, tz,
+		host, d.Port, d.User, d.Password, d.DBName, d.SSLMode, tz,
 	)
 }
 
@@ -1279,7 +1296,78 @@ type RedisConfig struct {
 }
 
 func (r *RedisConfig) Address() string {
-	return fmt.Sprintf("%s:%d", r.Host, r.Port)
+	host := strings.TrimSpace(r.Host)
+	if parsed := parseRedisURL(host); parsed != nil {
+		return parsed.Host
+	}
+	if host == "" {
+		host = "localhost"
+	}
+	if strings.Contains(host, ":") {
+		return host
+	}
+	return fmt.Sprintf("%s:%d", host, r.Port)
+}
+
+func (r *RedisConfig) PasswordValue() string {
+	if r.Password != "" {
+		return r.Password
+	}
+	if parsed := parseRedisURL(strings.TrimSpace(r.Host)); parsed != nil && parsed.User != nil {
+		if password, ok := parsed.User.Password(); ok {
+			return password
+		}
+	}
+	return ""
+}
+
+func (r *RedisConfig) DatabaseIndex() int {
+	if parsed := parseRedisURL(strings.TrimSpace(r.Host)); parsed != nil {
+		path := strings.Trim(parsed.Path, "/")
+		if path != "" {
+			if db, err := strconv.Atoi(path); err == nil && db >= 0 {
+				return db
+			}
+		}
+	}
+	return r.DB
+}
+
+func (r *RedisConfig) TLSEnabled() bool {
+	if r.EnableTLS {
+		return true
+	}
+	if parsed := parseRedisURL(strings.TrimSpace(r.Host)); parsed != nil {
+		return strings.EqualFold(parsed.Scheme, "rediss")
+	}
+	return false
+}
+
+func (r *RedisConfig) TLSServerName() string {
+	host := strings.TrimSpace(r.Host)
+	if parsed := parseRedisURL(host); parsed != nil {
+		return parsed.Hostname()
+	}
+	if before, _, ok := strings.Cut(host, ":"); ok {
+		return strings.Trim(before, "[]")
+	}
+	return host
+}
+
+func parseRedisURL(raw string) *url.URL {
+	if raw == "" || !strings.Contains(raw, "://") {
+		return nil
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Host == "" {
+		return nil
+	}
+	switch strings.ToLower(parsed.Scheme) {
+	case "redis", "rediss":
+		return parsed
+	default:
+		return nil
+	}
 }
 
 type OpsConfig struct {

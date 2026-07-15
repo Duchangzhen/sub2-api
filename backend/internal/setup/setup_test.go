@@ -74,8 +74,8 @@ func TestSetupDefaultAdminConcurrency(t *testing.T) {
 func TestSetupMigrationTimeout(t *testing.T) {
 	t.Run("uses default timeout when unset", func(t *testing.T) {
 		cfg := &SetupConfig{}
-		if got := cfg.migrationTimeout(); got != 60*time.Second {
-			t.Fatalf("migrationTimeout()=%s, want 60s", got)
+		if got := cfg.migrationTimeout(); got != defaultMigrationTimeout {
+			t.Fatalf("migrationTimeout()=%s, want %s", got, defaultMigrationTimeout)
 		}
 	})
 
@@ -125,5 +125,32 @@ func TestBuildDatabaseConnectionDSNsUsesPostgresForBootstrap(t *testing.T) {
 	}
 	if !strings.Contains(targetDSN, "dbname=sub2api") {
 		t.Fatalf("target DSN = %q, want configured database", targetDSN)
+	}
+}
+
+func TestRedisConfigURLMethods(t *testing.T) {
+	cfg := &RedisConfig{Host: "rediss://default:secret@redis.example.com:6380/2", Port: 6379}
+	if got := cfg.Address(); got != "redis.example.com:6380" {
+		t.Fatalf("Address() = %q", got)
+	}
+	if got := cfg.PasswordValue(); got != "secret" {
+		t.Fatalf("PasswordValue() = %q", got)
+	}
+	if got := cfg.DatabaseIndex(); got != 2 {
+		t.Fatalf("DatabaseIndex() = %d", got)
+	}
+	if !cfg.TLSEnabled() || cfg.TLSServerName() != "redis.example.com" {
+		t.Fatalf("Redis TLS URL helpers returned unexpected values")
+	}
+}
+
+func TestAutoSetupRequireRedis(t *testing.T) {
+	t.Setenv("AUTO_SETUP_REQUIRE_REDIS", "")
+	if AutoSetupRequireRedis() {
+		t.Fatal("AutoSetupRequireRedis() = true for empty env")
+	}
+	t.Setenv("AUTO_SETUP_REQUIRE_REDIS", "true")
+	if !AutoSetupRequireRedis() {
+		t.Fatal("AutoSetupRequireRedis() = false for true env")
 	}
 }

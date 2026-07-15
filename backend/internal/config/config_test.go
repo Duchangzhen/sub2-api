@@ -900,9 +900,25 @@ func TestConfigAddressHelpers(t *testing.T) {
 		t.Fatalf("DatabaseConfig.DSNWithTimezone() should use provided timezone")
 	}
 
+	neonCfg := DatabaseConfig{
+		Host:    "ep-example-pooler.us-east-1.aws.neon.tech",
+		Port:    5432,
+		User:    "postgres",
+		DBName:  "postgres",
+		SSLMode: "require",
+	}
+	if strings.Contains(neonCfg.DSN(), "-pooler") {
+		t.Fatalf("DatabaseConfig.DSN() should use the Neon direct host: %q", neonCfg.DSN())
+	}
+
 	redis := RedisConfig{Host: "redis", Port: 6379}
 	if redis.Address() != "redis:6379" {
 		t.Fatalf("RedisConfig.Address() = %q", redis.Address())
+	}
+
+	redisURL := RedisConfig{Host: "rediss://:secret@redis.example.com:6380/2", Port: 6379}
+	if redisURL.Address() != "redis.example.com:6380" || redisURL.PasswordValue() != "secret" || redisURL.DatabaseIndex() != 2 || !redisURL.TLSEnabled() {
+		t.Fatalf("RedisConfig URL helpers returned unexpected values")
 	}
 }
 

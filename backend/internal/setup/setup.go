@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -28,7 +29,7 @@ const (
 	InstallLockFile            = ".installed"
 	defaultUserConcurrency     = 5
 	simpleModeAdminConcurrency = 30
-	defaultMigrationTimeout    = 60 * time.Second
+	defaultMigrationTimeout    = 10 * time.Minute
 )
 
 func setupDefaultAdminConcurrency() int {
@@ -100,6 +101,81 @@ type RedisConfig struct {
 	EnableTLS bool   `json:"enable_tls" yaml:"enable_tls"`
 }
 
+func (r *RedisConfig) Address() string {
+	host := strings.TrimSpace(r.Host)
+	if parsed := parseRedisURL(host); parsed != nil {
+		return parsed.Host
+	}
+	if host == "" {
+		host = "localhost"
+	}
+	if strings.Contains(host, ":") {
+		return host
+	}
+	return fmt.Sprintf("%s:%d", host, r.Port)
+}
+
+func (r *RedisConfig) PasswordValue() string {
+	if r.Password != "" {
+		return r.Password
+	}
+	if parsed := parseRedisURL(strings.TrimSpace(r.Host)); parsed != nil && parsed.User != nil {
+		if password, ok := parsed.User.Password(); ok {
+			return password
+		}
+	}
+	return ""
+}
+
+func (r *RedisConfig) DatabaseIndex() int {
+	if parsed := parseRedisURL(strings.TrimSpace(r.Host)); parsed != nil {
+		path := strings.Trim(parsed.Path, "/")
+		if path != "" {
+			if db, err := strconv.Atoi(path); err == nil && db >= 0 {
+				return db
+			}
+		}
+	}
+	return r.DB
+}
+
+func (r *RedisConfig) TLSEnabled() bool {
+	if r.EnableTLS {
+		return true
+	}
+	if parsed := parseRedisURL(strings.TrimSpace(r.Host)); parsed != nil {
+		return strings.EqualFold(parsed.Scheme, "rediss")
+	}
+	return false
+}
+
+func (r *RedisConfig) TLSServerName() string {
+	host := strings.TrimSpace(r.Host)
+	if parsed := parseRedisURL(host); parsed != nil {
+		return parsed.Hostname()
+	}
+	if before, _, ok := strings.Cut(host, ":"); ok {
+		return strings.Trim(before, "[]")
+	}
+	return host
+}
+
+func parseRedisURL(raw string) *url.URL {
+	if raw == "" || !strings.Contains(raw, "://") {
+		return nil
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Host == "" {
+		return nil
+	}
+	switch strings.ToLower(parsed.Scheme) {
+	case "redis", "rediss":
+		return parsed
+	default:
+		return nil
+	}
+}
+
 type AdminConfig struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
@@ -165,7 +241,7 @@ func NeedsSetup() bool {
 func buildPostgresDSN(cfg *DatabaseConfig, dbName string) string {
 	return fmt.Sprintf(
 		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
-		cfg.Host, cfg.Port, cfg.User, cfg.Password, dbName, cfg.SSLMode,
+		config.NormalizeDatabaseHost(cfg.Host), cfg.Port, cfg.User, cfg.Password, dbName, cfg.SSLMode,
 	)
 }
 
@@ -250,15 +326,15 @@ func TestDatabaseConnection(cfg *DatabaseConfig) error {
 // TestRedisConnection tests the Redis connection
 func TestRedisConnection(cfg *RedisConfig) error {
 	opts := &redis.Options{
-		Addr:     fmt.Sprintf("%s:%d", cfg.Host, cfg.Port),
-		Password: cfg.Password,
-		DB:       cfg.DB,
+		Addr:     cfg.Address(),
+		Password: cfg.PasswordValue(),
+		DB:       cfg.DatabaseIndex(),
 	}
 
-	if cfg.EnableTLS {
+	if cfg.TLSEnabled() {
 		opts.TLSConfig = &tls.Config{
 			MinVersion: tls.VersionTLS12,
-			ServerName: cfg.Host,
+			ServerName: cfg.TLSServerName(),
 		}
 	}
 
@@ -527,6 +603,11 @@ func AutoSetupEnabled() bool {
 	return val == "true" || val == "1" || val == "yes"
 }
 
+func AutoSetupRequireRedis() bool {
+	val := strings.ToLower(strings.TrimSpace(os.Getenv("AUTO_SETUP_REQUIRE_REDIS")))
+	return val == "true" || val == "1" || val == "yes"
+}
+
 // getEnvOrDefault gets environment variable or returns default value
 func getEnvOrDefault(key, defaultValue string) string {
 	if val := os.Getenv(key); val != "" {
@@ -560,7 +641,7 @@ func AutoSetupFromEnv() error {
 	// Build config from environment variables
 	cfg := &SetupConfig{
 		Database: DatabaseConfig{
-			Host:     getEnvOrDefault("DATABASE_HOST", "localhost"),
+			Host:     config.NormalizeDatabaseHost(getEnvOrDefault("DATABASE_HOST", "localhost")),
 			Port:     getEnvIntOrDefault("DATABASE_PORT", 5432),
 			User:     getEnvOrDefault("DATABASE_USER", "postgres"),
 			Password: getEnvOrDefault("DATABASE_PASSWORD", ""),
@@ -611,9 +692,13 @@ func AutoSetupFromEnv() error {
 	// Test Redis connection
 	logger.LegacyPrintf("setup", "%s", "Testing Redis connection...")
 	if err := TestRedisConnection(&cfg.Redis); err != nil {
-		return fmt.Errorf("redis connection failed: %w", err)
+		if AutoSetupRequireRedis() {
+			return fmt.Errorf("redis connection failed: %w", err)
+		}
+		logger.LegacyPrintf("setup", "Redis connection failed, continuing auto setup because AUTO_SETUP_REQUIRE_REDIS is not enabled: %v", err)
+	} else {
+		logger.LegacyPrintf("setup", "%s", "Redis connection successful")
 	}
-	logger.LegacyPrintf("setup", "%s", "Redis connection successful")
 
 	// Initialize database
 	logger.LegacyPrintf("setup", "%s", "Initializing database...")
