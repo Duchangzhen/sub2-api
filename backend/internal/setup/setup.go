@@ -238,8 +238,8 @@ func NeedsSetup() bool {
 
 func buildPostgresDSN(cfg *DatabaseConfig, dbName string) string {
 	return fmt.Sprintf(
-		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s binary_parameters=yes",
-		cfg.Host, cfg.Port, cfg.User, cfg.Password, dbName, cfg.SSLMode,
+		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
+		config.NormalizeDatabaseHost(cfg.Host), cfg.Port, cfg.User, cfg.Password, dbName, cfg.SSLMode,
 	)
 }
 
@@ -632,7 +632,7 @@ func AutoSetupFromEnv() error {
 	// Build config from environment variables
 	cfg := &SetupConfig{
 		Database: DatabaseConfig{
-			Host:     getEnvOrDefault("DATABASE_HOST", "localhost"),
+			Host:     config.NormalizeDatabaseHost(getEnvOrDefault("DATABASE_HOST", "localhost")),
 			Port:     getEnvIntOrDefault("DATABASE_PORT", 5432),
 			User:     getEnvOrDefault("DATABASE_USER", "postgres"),
 			Password: getEnvOrDefault("DATABASE_PASSWORD", ""),

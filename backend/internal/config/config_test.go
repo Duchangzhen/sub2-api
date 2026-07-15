@@ -1036,6 +1036,37 @@ func TestDatabaseDSNWithTimezone_WithPassword(t *testing.T) {
 	}
 }
 
+func TestNormalizeDatabaseHost(t *testing.T) {
+	tests := map[string]string{
+		"ep-floral-snow-atlyogoo-pooler.c-9.us-east-1.aws.neon.tech": "ep-floral-snow-atlyogoo.c-9.us-east-1.aws.neon.tech",
+		"ep-floral-snow-atlyogoo.c-9.us-east-1.aws.neon.tech":        "ep-floral-snow-atlyogoo.c-9.us-east-1.aws.neon.tech",
+		"postgres.internal": "postgres.internal",
+	}
+	for input, want := range tests {
+		if got := NormalizeDatabaseHost(input); got != want {
+			t.Errorf("NormalizeDatabaseHost(%q) = %q, want %q", input, got, want)
+		}
+	}
+}
+
+func TestDatabaseDSNNormalizesNeonPoolerHost(t *testing.T) {
+	d := &DatabaseConfig{
+		Host:     "ep-example-pooler.us-east-1.aws.neon.tech",
+		Port:     5432,
+		User:     "u",
+		Password: "p",
+		DBName:   "db",
+		SSLMode:  "require",
+	}
+	got := d.DSN()
+	if strings.Contains(got, "-pooler") {
+		t.Fatalf("DSN should use the Neon direct host: %q", got)
+	}
+	if strings.Contains(got, "binary_parameters") {
+		t.Fatalf("DSN should not include the ineffective pooler workaround: %q", got)
+	}
+}
+
 func TestValidateAbsoluteHTTPURLMissingHost(t *testing.T) {
 	if err := ValidateAbsoluteHTTPURL("https://"); err == nil {
 		t.Fatalf("ValidateAbsoluteHTTPURL should reject missing host")
