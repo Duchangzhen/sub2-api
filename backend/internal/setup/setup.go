@@ -238,7 +238,7 @@ func NeedsSetup() bool {
 
 func buildPostgresDSN(cfg *DatabaseConfig, dbName string) string {
 	return fmt.Sprintf(
-		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
+		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s binary_parameters=yes",
 		cfg.Host, cfg.Port, cfg.User, cfg.Password, dbName, cfg.SSLMode,
 	)
 }
