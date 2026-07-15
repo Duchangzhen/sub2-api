@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -58,6 +59,34 @@ func TestRateLimiterFailureModes(t *testing.T) {
 	recorder = httptest.NewRecorder()
 	failCloseRouter.ServeHTTP(recorder, req)
 	require.Equal(t, http.StatusTooManyRequests, recorder.Code)
+}
+
+func TestRateLimiterAuthLoginFailOpenOverride(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	originalRun := rateLimitRun
+	rateLimitRun = func(ctx context.Context, client *redis.Client, key string, windowMillis int64) (int64, bool, error) {
+		return 0, false, errors.New("redis unavailable")
+	}
+	t.Cleanup(func() {
+		rateLimitRun = originalRun
+	})
+
+	limiter := NewRateLimiter(redis.NewClient(&redis.Options{Addr: "127.0.0.1:1"}))
+
+	router := gin.New()
+	router.Use(limiter.LimitWithOptions("auth-login", 20, time.Minute, RateLimitOptions{
+		FailureMode: RateLimitFailClose,
+	}))
+	router.POST("/login", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/login", nil)
+	req.RemoteAddr = "127.0.0.1:1234"
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, req)
+	require.Equal(t, http.StatusOK, recorder.Code)
 }
 
 func TestRateLimiterDifferentIPsIndependent(t *testing.T) {

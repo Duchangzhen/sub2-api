@@ -99,6 +99,11 @@ func (r *RateLimiter) LimitWithOptions(key string, limit int, window time.Durati
 		count, repaired, err := rateLimitRun(ctx, r.redis, redisKey, windowMillis)
 		if err != nil {
 			log.Printf("[RateLimit] redis error: key=%s mode=%s err=%v", redisKey, failureModeLabel(failureMode), err)
+			if shouldFailOpenOnRedisError(key) {
+				log.Printf("[RateLimit] fail-open override: key=%s", redisKey)
+				c.Next()
+				return
+			}
 			if failureMode == RateLimitFailClose {
 				abortRateLimit(c)
 				return
@@ -119,6 +124,10 @@ func (r *RateLimiter) LimitWithOptions(key string, limit int, window time.Durati
 
 		c.Next()
 	}
+}
+
+func shouldFailOpenOnRedisError(key string) bool {
+	return key == "auth-login"
 }
 
 func windowTTLMillis(window time.Duration) int64 {
