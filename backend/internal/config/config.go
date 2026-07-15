@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -1176,7 +1177,78 @@ type RedisConfig struct {
 }
 
 func (r *RedisConfig) Address() string {
-	return fmt.Sprintf("%s:%d", r.Host, r.Port)
+	host := strings.TrimSpace(r.Host)
+	if parsed := parseRedisURL(host); parsed != nil {
+		return parsed.Host
+	}
+	if host == "" {
+		host = "localhost"
+	}
+	if strings.Contains(host, ":") {
+		return host
+	}
+	return fmt.Sprintf("%s:%d", host, r.Port)
+}
+
+func (r *RedisConfig) PasswordValue() string {
+	if r.Password != "" {
+		return r.Password
+	}
+	if parsed := parseRedisURL(strings.TrimSpace(r.Host)); parsed != nil && parsed.User != nil {
+		if password, ok := parsed.User.Password(); ok {
+			return password
+		}
+	}
+	return ""
+}
+
+func (r *RedisConfig) DatabaseIndex() int {
+	if parsed := parseRedisURL(strings.TrimSpace(r.Host)); parsed != nil {
+		path := strings.Trim(parsed.Path, "/")
+		if path != "" {
+			if db, err := strconv.Atoi(path); err == nil && db >= 0 {
+				return db
+			}
+		}
+	}
+	return r.DB
+}
+
+func (r *RedisConfig) TLSEnabled() bool {
+	if r.EnableTLS {
+		return true
+	}
+	if parsed := parseRedisURL(strings.TrimSpace(r.Host)); parsed != nil {
+		return strings.EqualFold(parsed.Scheme, "rediss")
+	}
+	return false
+}
+
+func (r *RedisConfig) TLSServerName() string {
+	host := strings.TrimSpace(r.Host)
+	if parsed := parseRedisURL(host); parsed != nil {
+		return parsed.Hostname()
+	}
+	if before, _, ok := strings.Cut(host, ":"); ok {
+		return strings.Trim(before, "[]")
+	}
+	return host
+}
+
+func parseRedisURL(raw string) *url.URL {
+	if raw == "" || !strings.Contains(raw, "://") {
+		return nil
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Host == "" {
+		return nil
+	}
+	switch strings.ToLower(parsed.Scheme) {
+	case "redis", "rediss":
+		return parsed
+	default:
+		return nil
+	}
 }
 
 type OpsConfig struct {

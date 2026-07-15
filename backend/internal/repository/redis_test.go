@@ -44,4 +44,22 @@ func TestBuildRedisOptions(t *testing.T) {
 	optsTLS := buildRedisOptions(cfgTLS)
 	require.NotNil(t, optsTLS.TLSConfig)
 	require.Equal(t, "localhost", optsTLS.TLSConfig.ServerName)
+
+	cfgURL := &config.Config{
+		Redis: config.RedisConfig{
+			Host:                "rediss://:url-secret@redis.example.com:6380/3",
+			Port:                6379,
+			DialTimeoutSeconds:  5,
+			ReadTimeoutSeconds:  3,
+			WriteTimeoutSeconds: 4,
+			PoolSize:            100,
+			MinIdleConns:        10,
+		},
+	}
+	optsURL := buildRedisOptions(cfgURL)
+	require.Equal(t, "redis.example.com:6380", optsURL.Addr)
+	require.Equal(t, "url-secret", optsURL.Password)
+	require.Equal(t, 3, optsURL.DB)
+	require.NotNil(t, optsURL.TLSConfig)
+	require.Equal(t, "redis.example.com", optsURL.TLSConfig.ServerName)
 }

@@ -800,6 +800,28 @@ func TestConfigAddressHelpers(t *testing.T) {
 	if redis.Address() != "redis:6379" {
 		t.Fatalf("RedisConfig.Address() = %q", redis.Address())
 	}
+
+	redisWithPort := RedisConfig{Host: "redis.internal:6380", Port: 6379}
+	if redisWithPort.Address() != "redis.internal:6380" {
+		t.Fatalf("RedisConfig.Address() with host port = %q", redisWithPort.Address())
+	}
+
+	redisURL := RedisConfig{Host: "rediss://:secret@redis.example.com:6380/2", Port: 6379}
+	if redisURL.Address() != "redis.example.com:6380" {
+		t.Fatalf("RedisConfig.Address() from URL = %q", redisURL.Address())
+	}
+	if redisURL.PasswordValue() != "secret" {
+		t.Fatalf("RedisConfig.PasswordValue() from URL = %q", redisURL.PasswordValue())
+	}
+	if redisURL.DatabaseIndex() != 2 {
+		t.Fatalf("RedisConfig.DatabaseIndex() from URL = %d", redisURL.DatabaseIndex())
+	}
+	if !redisURL.TLSEnabled() {
+		t.Fatalf("RedisConfig.TLSEnabled() from rediss URL should be true")
+	}
+	if redisURL.TLSServerName() != "redis.example.com" {
+		t.Fatalf("RedisConfig.TLSServerName() from URL = %q", redisURL.TLSServerName())
+	}
 }
 
 func TestNormalizeStringSlice(t *testing.T) {
