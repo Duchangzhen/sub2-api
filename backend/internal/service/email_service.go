@@ -10,7 +10,9 @@ import (
 	"html"
 	"log/slog"
 	"math/big"
+	"mime"
 	"net"
+	"net/mail"
 	"net/smtp"
 	"net/url"
 	"strconv"
@@ -18,6 +20,7 @@ import (
 	"time"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	"github.com/google/uuid"
 )
 
 var (
@@ -190,13 +193,7 @@ func (s *EmailService) SendEmailWithConfig(config *SMTPConfig, to, subject, body
 	to = sanitizeEmailHeader(to)
 	subject = sanitizeEmailHeader(subject)
 
-	from := sanitizeEmailHeader(config.From)
-	if config.FromName != "" {
-		from = fmt.Sprintf("%s <%s>", sanitizeEmailHeader(config.FromName), sanitizeEmailHeader(config.From))
-	}
-
-	msg := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n%s",
-		from, to, subject, body)
+	msg := buildEmailMessage(config, to, subject, body, time.Now())
 
 	addr := fmt.Sprintf("%s:%d", config.Host, config.Port)
 	auth := smtp.PlainAuth("", config.Username, config.Password, config.Host)
@@ -206,6 +203,29 @@ func (s *EmailService) SendEmailWithConfig(config *SMTPConfig, to, subject, body
 	}
 
 	return s.sendMailPlain(addr, auth, config.From, to, []byte(msg), config.Host)
+}
+
+func buildEmailMessage(config *SMTPConfig, to, subject, body string, sentAt time.Time) string {
+	fromAddress := sanitizeEmailHeader(config.From)
+	from := (&mail.Address{
+		Name:    sanitizeEmailHeader(config.FromName),
+		Address: fromAddress,
+	}).String()
+	domain := "localhost"
+	if at := strings.LastIndex(fromAddress, "@"); at >= 0 && at+1 < len(fromAddress) {
+		domain = fromAddress[at+1:]
+	}
+
+	return fmt.Sprintf(
+		"Date: %s\r\nMessage-ID: <%s@%s>\r\nFrom: %s\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n%s",
+		sentAt.Format(time.RFC1123Z),
+		uuid.NewString(),
+		domain,
+		from,
+		to,
+		mime.QEncoding.Encode("UTF-8", subject),
+		body,
+	)
 }
 
 // sendMailPlain sends mail without TLS using a dialer with timeout.
