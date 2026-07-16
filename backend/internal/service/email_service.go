@@ -190,7 +190,7 @@ func (s *EmailService) SendTextEmail(ctx context.Context, to, subject, body stri
 	if err != nil {
 		return err
 	}
-	return s.sendEmailWithConfig(config, to, subject, body, "text/plain")
+	return s.sendEmailWithConfig(config, to, subject, body, true)
 }
 
 const smtpDialTimeout = 10 * time.Second
@@ -198,15 +198,19 @@ const smtpIOTimeout = 20 * time.Second
 
 // SendEmailWithConfig 使用指定配置发送邮件
 func (s *EmailService) SendEmailWithConfig(config *SMTPConfig, to, subject, body string) error {
-	return s.sendEmailWithConfig(config, to, subject, body, "text/html")
+	return s.sendEmailWithConfig(config, to, subject, body, false)
 }
 
-func (s *EmailService) sendEmailWithConfig(config *SMTPConfig, to, subject, body, contentType string) error {
+func (s *EmailService) sendEmailWithConfig(config *SMTPConfig, to, subject, body string, plainText bool) error {
 	// Sanitize all SMTP header fields to prevent header injection (CR/LF removal).
 	to = sanitizeEmailHeader(to)
 	subject = sanitizeEmailHeader(subject)
 
-	msg := buildEmailMessageWithContentType(config, to, subject, body, contentType, time.Now())
+	sentAt := time.Now()
+	msg := buildEmailMessage(config, to, subject, body, sentAt)
+	if plainText {
+		msg = buildTextEmailMessage(config, to, subject, body, sentAt)
+	}
 
 	addr := fmt.Sprintf("%s:%d", config.Host, config.Port)
 	auth := smtp.PlainAuth("", config.Username, config.Password, config.Host)
@@ -439,46 +443,6 @@ func (s *EmailService) VerifyCode(ctx context.Context, email, code string) error
 		slog.Error("failed to delete verification code after success", "email", email, "error", err)
 	}
 	return nil
-}
-
-// buildVerifyCodeEmailBody 构建验证码邮件HTML内容
-func (s *EmailService) buildVerifyCodeEmailBody(code, siteName string) string {
-	return fmt.Sprintf(`
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif; background-color: #f5f5f5; margin: 0; padding: 20px; }
-        .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-        .header { background: linear-gradient(135deg, #667eea 0%%, #764ba2 100%%); color: white; padding: 30px; text-align: center; }
-        .header h1 { margin: 0; font-size: 24px; }
-        .content { padding: 40px 30px; text-align: center; }
-        .code { font-size: 36px; font-weight: bold; letter-spacing: 8px; color: #333; background-color: #f8f9fa; padding: 20px 30px; border-radius: 8px; display: inline-block; margin: 20px 0; font-family: monospace; }
-        .info { color: #666; font-size: 14px; line-height: 1.6; margin-top: 20px; }
-        .footer { background-color: #f8f9fa; padding: 20px; text-align: center; color: #999; font-size: 12px; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>%s</h1>
-        </div>
-        <div class="content">
-            <p style="font-size: 18px; color: #333;">Your verification code is:</p>
-            <div class="code">%s</div>
-            <div class="info">
-                <p>This code will expire in <strong>15 minutes</strong>.</p>
-                <p>If you did not request this code, please ignore this email.</p>
-            </div>
-        </div>
-        <div class="footer">
-            <p>This is an automated message, please do not reply.</p>
-        </div>
-    </div>
-</body>
-</html>
-`, html.EscapeString(siteName), code)
 }
 
 // TestSMTPConnectionWithConfig 使用指定配置测试SMTP连接
