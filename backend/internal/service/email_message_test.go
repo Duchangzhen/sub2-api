@@ -26,3 +26,15 @@ func TestBuildEmailMessageAddsDeliverabilityHeaders(t *testing.T) {
 	require.Contains(t, message, "Content-Transfer-Encoding: 8bit\r\n")
 	require.True(t, strings.HasSuffix(message, "\r\n\r\n<p>123456</p>"))
 }
+
+func TestBuildTextEmailMessageUsesPlainTextContentType(t *testing.T) {
+	sentAt := time.Date(2026, time.July, 17, 10, 30, 0, 0, time.FixedZone("CST", 8*60*60))
+	message := buildTextEmailMessage(&SMTPConfig{
+		From:     "sender@163.com",
+		FromName: "ACAIM",
+	}, "user@qq.com", "邮箱验证码", "您的验证码是：123456", sentAt)
+
+	require.Contains(t, message, "Content-Type: text/plain; charset=UTF-8\r\n")
+	require.Contains(t, message, "Content-Transfer-Encoding: 8bit\r\n")
+	require.True(t, strings.HasSuffix(message, "\r\n\r\n您的验证码是：123456"))
+}

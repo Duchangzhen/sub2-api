@@ -184,16 +184,29 @@ func (s *EmailService) SendEmail(ctx context.Context, to, subject, body string) 
 	return s.SendEmailWithConfig(config, to, subject, body)
 }
 
+// SendTextEmail sends a plain-text email using the stored SMTP configuration.
+func (s *EmailService) SendTextEmail(ctx context.Context, to, subject, body string) error {
+	config, err := s.GetSMTPConfig(ctx)
+	if err != nil {
+		return err
+	}
+	return s.sendEmailWithConfig(config, to, subject, body, "text/plain")
+}
+
 const smtpDialTimeout = 10 * time.Second
 const smtpIOTimeout = 20 * time.Second
 
 // SendEmailWithConfig 使用指定配置发送邮件
 func (s *EmailService) SendEmailWithConfig(config *SMTPConfig, to, subject, body string) error {
+	return s.sendEmailWithConfig(config, to, subject, body, "text/html")
+}
+
+func (s *EmailService) sendEmailWithConfig(config *SMTPConfig, to, subject, body, contentType string) error {
 	// Sanitize all SMTP header fields to prevent header injection (CR/LF removal).
 	to = sanitizeEmailHeader(to)
 	subject = sanitizeEmailHeader(subject)
 
-	msg := buildEmailMessage(config, to, subject, body, time.Now())
+	msg := buildEmailMessageWithContentType(config, to, subject, body, contentType, time.Now())
 
 	addr := fmt.Sprintf("%s:%d", config.Host, config.Port)
 	auth := smtp.PlainAuth("", config.Username, config.Password, config.Host)
@@ -206,6 +219,14 @@ func (s *EmailService) SendEmailWithConfig(config *SMTPConfig, to, subject, body
 }
 
 func buildEmailMessage(config *SMTPConfig, to, subject, body string, sentAt time.Time) string {
+	return buildEmailMessageWithContentType(config, to, subject, body, "text/html", sentAt)
+}
+
+func buildTextEmailMessage(config *SMTPConfig, to, subject, body string, sentAt time.Time) string {
+	return buildEmailMessageWithContentType(config, to, subject, body, "text/plain", sentAt)
+}
+
+func buildEmailMessageWithContentType(config *SMTPConfig, to, subject, body, contentType string, sentAt time.Time) string {
 	fromAddress := sanitizeEmailHeader(config.From)
 	from := (&mail.Address{
 		Name:    sanitizeEmailHeader(config.FromName),
@@ -217,13 +238,14 @@ func buildEmailMessage(config *SMTPConfig, to, subject, body string, sentAt time
 	}
 
 	return fmt.Sprintf(
-		"Date: %s\r\nMessage-ID: <%s@%s>\r\nFrom: %s\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n%s",
+		"Date: %s\r\nMessage-ID: <%s@%s>\r\nFrom: %s\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: %s; charset=UTF-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n%s",
 		sentAt.Format(time.RFC1123Z),
 		uuid.NewString(),
 		domain,
 		from,
 		to,
 		mime.QEncoding.Encode("UTF-8", subject),
+		contentType,
 		body,
 	)
 }
@@ -371,32 +393,13 @@ func (s *EmailService) SendVerifyCode(ctx context.Context, email, siteName strin
 		return fmt.Errorf("save verify code: %w", err)
 	}
 
-	if s.notificationEmailService != nil {
-		err := s.notificationEmailService.Send(ctx, NotificationEmailSendInput{
-			Event:          NotificationEmailEventAuthVerifyCode,
-			Locale:         firstEmailLocale(locale),
-			RecipientEmail: email,
-			RecipientName:  emailRecipientName(email),
-			Variables: map[string]string{
-				"verification_code":  code,
-				"expires_in_minutes": strconv.Itoa(int(verifyCodeTTL / time.Minute)),
-			},
-		})
-		if err == nil {
-			return nil
-		}
-		if !shouldFallbackNotificationEmail(err) {
-			return err
-		}
-		slog.Warn("failed to send templated verification email, falling back to legacy template", "recipient_hash", notificationEmailHash(email), "error", err)
-	}
-
-	// 构建邮件内容
-	subject := fmt.Sprintf("[%s] Email Verification Code", siteName)
-	body := s.buildVerifyCodeEmailBody(code, siteName)
+	// Keep authentication mail deliberately simple. Some mailbox providers silently
+	// filter the richer HTML notification template even after accepting it over SMTP.
+	subject := fmt.Sprintf("[%s] 邮箱验证码", siteName)
+	body := fmt.Sprintf("您的 %s 验证码是：%s\n\n验证码 %d 分钟内有效，请勿泄露。", siteName, code, int(verifyCodeTTL/time.Minute))
 
 	// 发送邮件
-	if err := s.SendEmail(ctx, email, subject, body); err != nil {
+	if err := s.SendTextEmail(ctx, email, subject, body); err != nil {
 		return fmt.Errorf("send email: %w", err)
 	}
 
