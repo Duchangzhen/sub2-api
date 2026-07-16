@@ -261,3 +261,10 @@ func (s *SettingService) getStringOrDefault(settings map[string]string, key, def
 	}
 	return defaultValue
 }
+
+func (s *SettingService) getStringOrDefaultAllowEmpty(settings map[string]string, key, defaultValue string) string {
+	if value, ok := settings[key]; ok {
+		return value
+	}
+	return defaultValue
+}
