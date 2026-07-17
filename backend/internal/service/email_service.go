@@ -1,20 +1,25 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/subtle"
 	"crypto/tls"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"html"
+	"io"
 	"log/slog"
 	"math/big"
 	"mime"
 	"net"
 	"net/mail"
+	"net/http"
 	"net/smtp"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -177,6 +182,10 @@ func (s *EmailService) GetSMTPConfig(ctx context.Context) (*SMTPConfig, error) {
 
 // SendEmail 发送邮件（使用数据库中保存的配置）
 func (s *EmailService) SendEmail(ctx context.Context, to, subject, body string) error {
+	if handled, err := s.sendEmailViaConfiguredHTTPProvider(ctx, to, subject, body, false); handled {
+		return err
+	}
+
 	config, err := s.GetSMTPConfig(ctx)
 	if err != nil {
 		return err
@@ -186,6 +195,10 @@ func (s *EmailService) SendEmail(ctx context.Context, to, subject, body string) 
 
 // SendTextEmail sends a plain-text email using the stored SMTP configuration.
 func (s *EmailService) SendTextEmail(ctx context.Context, to, subject, body string) error {
+	if handled, err := s.sendEmailViaConfiguredHTTPProvider(ctx, to, subject, body, true); handled {
+		return err
+	}
+
 	config, err := s.GetSMTPConfig(ctx)
 	if err != nil {
 		return err
@@ -195,6 +208,67 @@ func (s *EmailService) SendTextEmail(ctx context.Context, to, subject, body stri
 
 const smtpDialTimeout = 10 * time.Second
 const smtpIOTimeout = 20 * time.Second
+const resendDefaultAPIURL = "https://api.resend.com/emails"
+
+type resendEmailRequest struct {
+	From    string   `json:"from"`
+	To      []string `json:"to"`
+	Subject string   `json:"subject"`
+	HTML    string   `json:"html,omitempty"`
+	Text    string   `json:"text,omitempty"`
+}
+
+func (s *EmailService) sendEmailViaConfiguredHTTPProvider(ctx context.Context, to, subject, body string, plainText bool) (bool, error) {
+	apiKey := strings.TrimSpace(os.Getenv("RESEND_API_KEY"))
+	if apiKey == "" {
+		return false, nil
+	}
+
+	from := strings.TrimSpace(os.Getenv("RESEND_FROM"))
+	if from == "" {
+		return true, fmt.Errorf("resend from address is not configured")
+	}
+
+	requestBody := resendEmailRequest{
+		From:    sanitizeEmailHeader(from),
+		To:      []string{sanitizeEmailHeader(to)},
+		Subject: sanitizeEmailHeader(subject),
+	}
+	if plainText {
+		requestBody.Text = body
+	} else {
+		requestBody.HTML = body
+	}
+
+	payload, err := json.Marshal(requestBody)
+	if err != nil {
+		return true, fmt.Errorf("marshal resend email: %w", err)
+	}
+
+	apiURL := strings.TrimSpace(os.Getenv("RESEND_API_URL"))
+	if apiURL == "" {
+		apiURL = resendDefaultAPIURL
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, bytes.NewReader(payload))
+	if err != nil {
+		return true, fmt.Errorf("create resend request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := (&http.Client{Timeout: smtpIOTimeout}).Do(req)
+	if err != nil {
+		return true, fmt.Errorf("send email via resend: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	responseBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return true, fmt.Errorf("resend returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(responseBody)))
+	}
+
+	return true, nil
+}
 
 // SendEmailWithConfig 使用指定配置发送邮件
 func (s *EmailService) SendEmailWithConfig(config *SMTPConfig, to, subject, body string) error {
