@@ -19,6 +19,42 @@
         </div>
       </div>
 
+      <!-- Purchase Guide -->
+      <div class="card border-amber-200 bg-amber-50 dark:border-amber-800/50 dark:bg-amber-900/20">
+        <div class="p-6">
+          <div class="flex items-start gap-4">
+            <div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-amber-100 dark:bg-amber-900/30">
+              <Icon name="gift" size="md" class="text-amber-600 dark:text-amber-400" />
+            </div>
+            <div class="min-w-0 flex-1">
+              <h2 class="text-base font-semibold text-amber-900 dark:text-amber-200">
+                {{ t('redeem.purchaseGuideTitle') }}
+              </h2>
+              <p class="mt-1 text-sm font-medium text-amber-800 dark:text-amber-300">
+                {{ t('redeem.purchaseDiscount') }}
+              </p>
+              <ol class="mt-3 list-inside list-decimal space-y-1.5 text-sm leading-6 text-amber-800 dark:text-amber-300">
+                <li>{{ t('redeem.purchaseStep1') }}</li>
+                <li>{{ t('redeem.purchaseStep2') }}</li>
+                <li>{{ t('redeem.purchaseStep3') }}</li>
+              </ol>
+              <a
+                :href="xianyuPurchaseURL"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="btn btn-primary mt-4 inline-flex"
+              >
+                {{ t('redeem.openXianyu') }}
+                <Icon name="externalLink" size="sm" />
+              </a>
+              <p class="mt-2 break-all text-xs text-amber-700 dark:text-amber-400">
+                {{ xianyuPurchaseURL }}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Redeem Form -->
       <div class="card">
         <div class="p-6">
@@ -376,6 +412,7 @@ const errorMessage = ref('')
 const history = ref<RedeemHistoryItem[]>([])
 const loadingHistory = ref(false)
 const contactInfo = ref('')
+const xianyuPurchaseURL = 'https://m.tb.cn/h.8cpG0SX?tk=HyRvgIL2A25'
 
 // Helper functions for history display
 const isBalanceType = (type: string) => {
