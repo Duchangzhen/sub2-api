@@ -127,31 +127,28 @@ async function loadChannels() {
         return {} as Record<number, number>
       }),
     ])
-    if (list.length > 0) {
-      channels.value = list
-    } else {
-      const firstPage = await accountsAPI.list(1, 100, { status: 'active' })
-      const accounts = [...firstPage.items]
-      for (let page = 2; page <= firstPage.pages; page += 1) {
-        const nextPage = await accountsAPI.list(page, 100, { status: 'active' })
-        accounts.push(...nextPage.items)
-      }
-      const accountChannels = buildChannelsFromAdminAccounts(accounts)
-      const modelNames = [...new Set(accountChannels.flatMap((channel) =>
-        channel.platforms.flatMap((section) =>
-          section.supported_models.map((model) => model.name),
-        ),
-      ))]
-      await Promise.all(modelNames.map(async (model) => {
-        if (defaultPricingCache.has(model)) return
-        try {
-          defaultPricingCache.set(model, await channelsAPI.getModelDefaultPricing(model))
-        } catch {
-          defaultPricingCache.set(model, { found: false })
-        }
-      }))
-      channels.value = applyDefaultPricingToChannels(accountChannels, defaultPricingCache)
+    const firstPage = await accountsAPI.list(1, 100, { status: 'active' })
+    const accounts = [...firstPage.items]
+    for (let page = 2; page <= firstPage.pages; page += 1) {
+      const nextPage = await accountsAPI.list(page, 100, { status: 'active' })
+      accounts.push(...nextPage.items)
     }
+    const accountChannels = buildChannelsFromAdminAccounts(accounts)
+    const modelNames = [...new Set(accountChannels.flatMap((channel) =>
+      channel.platforms.flatMap((section) =>
+        section.supported_models.map((model) => model.name),
+      ),
+    ))]
+    await Promise.all(modelNames.map(async (model) => {
+      if (defaultPricingCache.has(model)) return
+      try {
+        defaultPricingCache.set(model, await channelsAPI.getModelDefaultPricing(model))
+      } catch {
+        defaultPricingCache.set(model, { found: false })
+      }
+    }))
+    const accountModels = applyDefaultPricingToChannels(accountChannels, defaultPricingCache)
+    channels.value = [...list, ...accountModels]
     userGroupRates.value = rates
   } catch (err: unknown) {
     appStore.showError(extractApiErrorMessage(err, t('common.error')))
