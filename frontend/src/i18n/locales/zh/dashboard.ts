@@ -487,7 +487,7 @@ export default {
     modelCount: '{count} 个模型',
     priceUnit: '$ / 百万 Token',
     allModels: '全部模型',
-    catalogDescription: '查看所有自动同步的分组、模型与价格',
+    catalogDescription: '查看自动同步的分组、模型与倍率后实际价格',
     noMatchingModels: '没有符合当前筛选条件的模型',
     tierCount: '{count} 档',
     filters: {

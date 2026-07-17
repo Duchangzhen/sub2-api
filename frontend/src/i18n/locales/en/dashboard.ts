@@ -482,7 +482,7 @@ export default {
     modelCount: '{count} models',
     priceUnit: '$ / million tokens',
     allModels: 'All Models',
-    catalogDescription: 'Browse automatically synced groups, models, and pricing',
+    catalogDescription: 'Browse synced groups, models, and effective prices after group rates',
     noMatchingModels: 'No models match the current filters',
     tierCount: '{count} tiers',
     filters: {

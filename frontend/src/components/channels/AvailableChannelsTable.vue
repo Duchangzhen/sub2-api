@@ -1,4 +1,5 @@
 <template>
+  <div class="table-wrapper marketplace-scroll">
   <div v-if="loading" class="rounded-lg border border-gray-200 bg-white py-20 text-center dark:border-dark-700 dark:bg-dark-900">
     <Icon name="refresh" size="lg" class="inline-block animate-spin text-gray-400" />
   </div>
@@ -203,6 +204,7 @@
       </div>
     </main>
   </div>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -218,7 +220,7 @@ import type {
 } from '@/api/channels'
 import type { GroupPlatform } from '@/types'
 import { platformBadgeClass } from '@/utils/platformColors'
-import { formatScaled } from '@/utils/pricing'
+import { formatScaledPriceForRates } from '@/utils/modelMarketplacePricing'
 import { useAppStore } from '@/stores/app'
 import {
   BILLING_MODE_IMAGE,
@@ -376,21 +378,34 @@ function priceRows(model: MarketplaceModel): PriceRow[] {
   if (!pricing) return []
   if (pricing.billing_mode === BILLING_MODE_PER_REQUEST) {
     return compactPriceRows([
-      [t(`${props.pricingKeyPrefix}.perRequestPrice`), formatScaled(pricing.per_request_price, 1), t(`${props.pricingKeyPrefix}.unitPerRequest`)],
+      [t(`${props.pricingKeyPrefix}.perRequestPrice`), modelPrice(model, pricing.per_request_price, 1), t(`${props.pricingKeyPrefix}.unitPerRequest`)],
     ])
   }
   if (pricing.billing_mode === BILLING_MODE_IMAGE) {
     return compactPriceRows([
-      [t(`${props.pricingKeyPrefix}.imageOutputPrice`), formatScaled(pricing.per_request_price ?? pricing.image_output_price, 1), t(`${props.pricingKeyPrefix}.unitPerRequest`)],
+      [t(`${props.pricingKeyPrefix}.imageOutputPrice`), modelPrice(model, pricing.per_request_price ?? pricing.image_output_price, 1), t(`${props.pricingKeyPrefix}.unitPerRequest`)],
     ])
   }
   return compactPriceRows([
-    [t(`${props.pricingKeyPrefix}.inputPrice`), formatScaled(pricing.input_price, 1_000_000), t(`${props.pricingKeyPrefix}.unitPerMillion`)],
-    [t(`${props.pricingKeyPrefix}.outputPrice`), formatScaled(pricing.output_price, 1_000_000), t(`${props.pricingKeyPrefix}.unitPerMillion`)],
-    [t(`${props.pricingKeyPrefix}.cacheReadPrice`), formatScaled(pricing.cache_read_price, 1_000_000), t(`${props.pricingKeyPrefix}.unitPerMillion`)],
-    [t(`${props.pricingKeyPrefix}.cacheWritePrice`), formatScaled(pricing.cache_write_price, 1_000_000), t(`${props.pricingKeyPrefix}.unitPerMillion`)],
-    [t(`${props.pricingKeyPrefix}.imageOutputPrice`), formatScaled(pricing.image_output_price, 1_000_000), t(`${props.pricingKeyPrefix}.unitPerMillion`)],
+    [t(`${props.pricingKeyPrefix}.inputPrice`), modelPrice(model, pricing.input_price, 1_000_000), t(`${props.pricingKeyPrefix}.unitPerMillion`)],
+    [t(`${props.pricingKeyPrefix}.outputPrice`), modelPrice(model, pricing.output_price, 1_000_000), t(`${props.pricingKeyPrefix}.unitPerMillion`)],
+    [t(`${props.pricingKeyPrefix}.cacheReadPrice`), modelPrice(model, pricing.cache_read_price, 1_000_000), t(`${props.pricingKeyPrefix}.unitPerMillion`)],
+    [t(`${props.pricingKeyPrefix}.cacheWritePrice`), modelPrice(model, pricing.cache_write_price, 1_000_000), t(`${props.pricingKeyPrefix}.unitPerMillion`)],
+    [t(`${props.pricingKeyPrefix}.imageOutputPrice`), modelPrice(model, pricing.image_output_price, 1_000_000), t(`${props.pricingKeyPrefix}.unitPerMillion`)],
   ])
+}
+
+function modelPrice(model: MarketplaceModel, value: number | null, scale: number): string {
+  return formatScaledPriceForRates(value, scale, applicableRates(model))
+}
+
+function applicableRates(model: MarketplaceModel): number[] {
+  if (selectedGroup.value !== ALL_FILTER) {
+    const group = model.groups.find((item) => String(item.id) === selectedGroup.value)
+    return group ? [effectiveRate(group)] : [1]
+  }
+  const rates = model.groups.map(effectiveRate)
+  return rates.length > 0 ? rates : [1]
 }
 
 function compactPriceRows(rows: Array<[string, string, string]>): PriceRow[] {
@@ -429,6 +444,29 @@ async function copyModelName(name: string): Promise<void> {
 </script>
 
 <style scoped>
+.marketplace-scroll {
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: rgb(156 163 175) transparent;
+}
+
+.marketplace-scroll::-webkit-scrollbar {
+  width: 10px;
+}
+
+.marketplace-scroll::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 6px;
+  background-clip: padding-box;
+  background-color: rgb(156 163 175);
+}
+
+.marketplace-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
 .filter-button {
   display: inline-flex;
   min-height: 34px;
