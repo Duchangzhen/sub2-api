@@ -103,6 +103,40 @@ func TestRateLimiterDifferentIPsIndependent(t *testing.T) {
 	require.Equal(t, http.StatusTooManyRequests, rec3.Code, "第一个 IP 的第二次请求应被限流")
 }
 
+func TestRateLimiterDifferentForwardedIPsIndependentBehindProxy(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	callCounts := make(map[string]int64)
+	originalRun := rateLimitRun
+	rateLimitRun = func(ctx context.Context, client *redis.Client, key string, windowMillis int64) (int64, bool, error) {
+		callCounts[key]++
+		return callCounts[key], false, nil
+	}
+	t.Cleanup(func() {
+		rateLimitRun = originalRun
+	})
+
+	limiter := NewRateLimiter(redis.NewClient(&redis.Options{Addr: "127.0.0.1:1"}))
+	router := gin.New()
+	router.Use(limiter.Limit("api", 1, time.Second))
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	performForwardedRequest := func(clientIP string) int {
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		req.RemoteAddr = "10.0.0.10:1234"
+		req.Header.Set("CF-Connecting-IP", clientIP)
+		recorder := httptest.NewRecorder()
+		router.ServeHTTP(recorder, req)
+		return recorder.Code
+	}
+
+	require.Equal(t, http.StatusOK, performForwardedRequest("203.0.113.10"))
+	require.Equal(t, http.StatusOK, performForwardedRequest("203.0.113.11"))
+	require.Equal(t, http.StatusTooManyRequests, performForwardedRequest("203.0.113.10"))
+}
+
 func TestRateLimiterSuccessAndLimit(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
