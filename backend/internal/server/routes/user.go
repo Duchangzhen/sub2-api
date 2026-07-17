@@ -72,10 +72,10 @@ func RegisterUserRoutes(
 			groups.GET("/rates", h.APIKey.GetUserGroupRates)
 		}
 
-		// 用户可用渠道（非管理员接口）
+		// 管理员模型广场
 		channels := authenticated.Group("/channels")
 		{
-			channels.GET("/available", h.AvailableChannel.List)
+			channels.GET("/available", middleware.AdminOnly(), h.AvailableChannel.List)
 		}
 
 		// 使用记录

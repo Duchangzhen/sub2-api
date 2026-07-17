@@ -56,9 +56,11 @@ import TablePageLayout from '@/components/layout/TablePageLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
 import AvailableChannelsTable from '@/components/channels/AvailableChannelsTable.vue'
 import userChannelsAPI, { type UserAvailableChannel } from '@/api/channels'
+import accountsAPI from '@/api/admin/accounts'
 import userGroupsAPI from '@/api/groups'
 import { useAppStore } from '@/stores/app'
 import { extractApiErrorMessage } from '@/utils/apiError'
+import { buildChannelsFromAdminAccounts } from '@/utils/adminAccountChannels'
 
 const { t } = useI18n()
 const appStore = useAppStore()
@@ -114,7 +116,17 @@ async function loadChannels() {
         return {} as Record<number, number>
       }),
     ])
-    channels.value = list
+    if (list.length > 0) {
+      channels.value = list
+    } else {
+      const firstPage = await accountsAPI.list(1, 100, { status: 'active' })
+      const accounts = [...firstPage.items]
+      for (let page = 2; page <= firstPage.pages; page += 1) {
+        const nextPage = await accountsAPI.list(page, 100, { status: 'active' })
+        accounts.push(...nextPage.items)
+      }
+      channels.value = buildChannelsFromAdminAccounts(accounts)
+    }
     userGroupRates.value = rates
   } catch (err: unknown) {
     appStore.showError(extractApiErrorMessage(err, t('common.error')))

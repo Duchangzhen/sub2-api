@@ -39,8 +39,11 @@ func NewAvailableChannelHandler(
 	}
 }
 
-// featureEnabled 返回 available-channels 开关是否启用。默认关闭（opt-in）。
+// featureEnabled returns true for admins regardless of the legacy public feature switch.
 func (h *AvailableChannelHandler) featureEnabled(c *gin.Context) bool {
+	if role, ok := middleware.GetUserRoleFromContext(c); ok && role == service.RoleAdmin {
+		return true
+	}
 	if h.settingService == nil {
 		return false
 	}
@@ -124,8 +127,6 @@ func (h *AvailableChannelHandler) List(c *gin.Context) {
 		return
 	}
 
-	// Feature 未启用时返回空数组（不暴露渠道信息）。检查放在认证之后，
-	// 保持与未开关前的 401 行为一致：未登录先 401，登录后再按开关决定。
 	if !h.featureEnabled(c) {
 		response.Success(c, []userAvailableChannel{})
 		return
