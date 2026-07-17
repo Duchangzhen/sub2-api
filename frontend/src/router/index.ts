@@ -260,7 +260,7 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/user/AvailableChannelsView.vue'),
     meta: {
       requiresAuth: true,
-      requiresAdmin: false,
+      requiresAdmin: true,
       title: 'Available Channels',
       titleKey: 'availableChannels.title',
       descriptionKey: 'availableChannels.description'
