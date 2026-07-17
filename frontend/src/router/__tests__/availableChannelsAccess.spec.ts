@@ -19,8 +19,12 @@ describe('available channels access', () => {
   })
 
   it('only adds the navigation item for administrators', () => {
-    expect(sidebarSource).toMatch(
-      /if \(isAdmin\.value\) \{\s*items\.push\(\{ path: '\/available-channels'/
+    const adminNavigationBlock = sidebarSource.match(
+      /if \(isAdmin\.value\) \{\s*items\.push\(\{ path: '\/available-channels'[\s\S]*?\}\)\s*\}/
     )
+
+    expect(adminNavigationBlock).not.toBeNull()
+    expect(adminNavigationBlock?.[0]).not.toContain('featureFlag')
+    expect(adminNavigationBlock?.[0]).not.toContain('hideInSimpleMode')
   })
 })
