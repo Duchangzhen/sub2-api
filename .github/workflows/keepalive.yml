@@ -5,7 +5,7 @@ on:
     branches:
       - main
   schedule:
-    - cron: '*/10 * * * *'
+    - cron: '*/5 * * * *'
   workflow_dispatch:
 
 permissions:
@@ -18,11 +18,19 @@ concurrency:
 jobs:
   ping:
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 4
     steps:
       - name: Ping public endpoints
         run: |
-          curl --fail --silent --show-error --max-time 30 --retry 2 --retry-delay 5 \
-            "https://acaim.onrender.com/setup/status?keepalive=github-actions" || \
-          curl --fail --silent --show-error --max-time 30 --retry 2 --retry-delay 5 \
-            "https://acaim.onrender.com/?keepalive=github-actions"
+          for attempt in {1..12}; do
+            body=$(curl --fail --silent --show-error --max-time 30 \
+              "https://acaim.onrender.com/health?keepalive=github-actions&attempt=${attempt}" || true)
+            if printf '%s' "$body" | grep -q '"status":"ok"'; then
+              echo "ACAIM is awake"
+              exit 0
+            fi
+            echo "Waiting for ACAIM to wake up (${attempt}/12)"
+            sleep 10
+          done
+          echo "ACAIM did not become healthy in time"
+          exit 1
