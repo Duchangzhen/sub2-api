@@ -478,11 +478,14 @@ export default {
   // Available Channels (user-facing)
   availableChannels: {
     title: '模型广场',
-    description: '查看您可访问的渠道与其支持的模型、定价',
-    searchPlaceholder: '搜索渠道或模型...',
-    empty: '暂无可用渠道',
+    description: '按分组查看可用模型与价格',
+    searchPlaceholder: '搜索分组或模型...',
+    empty: '暂无可展示的模型',
     noModels: '未配置模型',
     noPricing: '未配置定价',
+    ungrouped: '未分组',
+    modelCount: '{count} 个模型',
+    priceUnit: '$ / 百万 Token',
     exclusive: '专属',
     public: '公开',
     exclusiveTooltip: '管理员授权给你的专属分组',

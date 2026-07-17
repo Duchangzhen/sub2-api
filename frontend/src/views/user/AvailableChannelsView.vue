@@ -57,10 +57,14 @@ import Icon from '@/components/icons/Icon.vue'
 import AvailableChannelsTable from '@/components/channels/AvailableChannelsTable.vue'
 import userChannelsAPI, { type UserAvailableChannel } from '@/api/channels'
 import accountsAPI from '@/api/admin/accounts'
+import channelsAPI, { type ModelDefaultPricing } from '@/api/admin/channels'
 import userGroupsAPI from '@/api/groups'
 import { useAppStore } from '@/stores/app'
 import { extractApiErrorMessage } from '@/utils/apiError'
-import { buildChannelsFromAdminAccounts } from '@/utils/adminAccountChannels'
+import {
+  applyDefaultPricingToChannels,
+  buildChannelsFromAdminAccounts,
+} from '@/utils/adminAccountChannels'
 
 const { t } = useI18n()
 const appStore = useAppStore()
@@ -69,6 +73,7 @@ const channels = ref<UserAvailableChannel[]>([])
 const userGroupRates = ref<Record<number, number>>({})
 const loading = ref(false)
 const searchQuery = ref('')
+const defaultPricingCache = new Map<string, ModelDefaultPricing>()
 
 const columnLabels = computed(() => ({
   name: t('availableChannels.columns.name'),
@@ -92,12 +97,18 @@ const filteredChannels = computed(() => {
       const nameHit = ch.name.toLowerCase().includes(q)
       const descHit = (ch.description || '').toLowerCase().includes(q)
       if (nameHit || descHit) return ch
-      const matchingSections = ch.platforms.filter(
-        (p) =>
-          p.platform.toLowerCase().includes(q) ||
-          p.groups.some((g) => g.name.toLowerCase().includes(q)) ||
-          p.supported_models.some((m) => m.name.toLowerCase().includes(q)),
-      )
+      const matchingSections = ch.platforms
+        .map((section) => {
+          const sectionHit = section.platform.toLowerCase().includes(q) ||
+            section.groups.some((group) => group.name.toLowerCase().includes(q))
+          if (sectionHit) return section
+          const matchingModels = section.supported_models.filter((model) =>
+            model.name.toLowerCase().includes(q),
+          )
+          if (matchingModels.length === 0) return null
+          return { ...section, supported_models: matchingModels }
+        })
+        .filter((section): section is UserAvailableChannel['platforms'][number] => section !== null)
       if (matchingSections.length === 0) return null
       return { ...ch, platforms: matchingSections }
     })
@@ -125,7 +136,21 @@ async function loadChannels() {
         const nextPage = await accountsAPI.list(page, 100, { status: 'active' })
         accounts.push(...nextPage.items)
       }
-      channels.value = buildChannelsFromAdminAccounts(accounts)
+      const accountChannels = buildChannelsFromAdminAccounts(accounts)
+      const modelNames = [...new Set(accountChannels.flatMap((channel) =>
+        channel.platforms.flatMap((section) =>
+          section.supported_models.map((model) => model.name),
+        ),
+      ))]
+      await Promise.all(modelNames.map(async (model) => {
+        if (defaultPricingCache.has(model)) return
+        try {
+          defaultPricingCache.set(model, await channelsAPI.getModelDefaultPricing(model))
+        } catch {
+          defaultPricingCache.set(model, { found: false })
+        }
+      }))
+      channels.value = applyDefaultPricingToChannels(accountChannels, defaultPricingCache)
     }
     userGroupRates.value = rates
   } catch (err: unknown) {

@@ -472,12 +472,15 @@ export default {
 
   // Available Channels (user-facing)
   availableChannels: {
-    title: 'Available Channels',
-    description: 'Channels you can access, along with their supported models and pricing',
-    searchPlaceholder: 'Search channels or models...',
-    empty: 'No available channels',
+    title: 'Model Marketplace',
+    description: 'Browse available models and pricing by group',
+    searchPlaceholder: 'Search groups or models...',
+    empty: 'No models to display',
     noModels: 'No models configured',
     noPricing: 'Pricing not configured',
+    ungrouped: 'Ungrouped',
+    modelCount: '{count} models',
+    priceUnit: '$ / million tokens',
     exclusive: 'Exclusive',
     public: 'Public',
     exclusiveTooltip: 'Exclusive groups granted to you by an admin',

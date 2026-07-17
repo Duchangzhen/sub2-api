@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
 import type { Account, Group } from '@/types'
-import { buildChannelsFromAdminAccounts } from '@/utils/adminAccountChannels'
+import {
+  applyDefaultPricingToChannels,
+  buildChannelsFromAdminAccounts,
+} from '@/utils/adminAccountChannels'
 
 function makeGroup(overrides: Partial<Group> = {}): Group {
   return {
@@ -107,5 +110,24 @@ describe('buildChannelsFromAdminAccounts', () => {
 
     expect(channels).toHaveLength(1)
     expect(channels[0].platforms[0].groups).toEqual([])
+  })
+
+  it('fills missing account model prices from the native pricing catalog', () => {
+    const channels = buildChannelsFromAdminAccounts([makeAccount()])
+    const hydrated = applyDefaultPricingToChannels(channels, new Map([
+      ['gpt-5.5', {
+        found: true,
+        input_price: 1.25e-6,
+        output_price: 10e-6,
+      }],
+    ]))
+
+    const models = hydrated[0].platforms[0].supported_models
+    expect(models.find((model) => model.name === 'gpt-5.5')?.pricing).toMatchObject({
+      billing_mode: 'token',
+      input_price: 1.25e-6,
+      output_price: 10e-6,
+    })
+    expect(models.find((model) => model.name === 'gpt-5.6-sol')?.pricing).toBeNull()
   })
 })

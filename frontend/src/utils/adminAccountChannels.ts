@@ -2,8 +2,10 @@ import type { Account, Group } from '@/types'
 import type {
   UserAvailableChannel,
   UserAvailableGroup,
+  UserSupportedModelPricing,
   UserSupportedModel,
 } from '@/api/channels'
+import type { ModelDefaultPricing } from '@/api/admin/channels'
 
 function modelNamesFromAccount(account: Account): string[] {
   const mapping = account.credentials?.model_mapping
@@ -63,4 +65,36 @@ export function buildChannelsFromAdminAccounts(accounts: Account[]): UserAvailab
       }
     })
     .filter((channel): channel is UserAvailableChannel => channel !== null)
+}
+
+function toSupportedModelPricing(
+  pricing: ModelDefaultPricing | undefined,
+): UserSupportedModelPricing | null {
+  if (!pricing?.found) return null
+  return {
+    billing_mode: 'token',
+    input_price: pricing.input_price ?? null,
+    output_price: pricing.output_price ?? null,
+    cache_write_price: pricing.cache_write_price ?? null,
+    cache_read_price: pricing.cache_read_price ?? null,
+    image_output_price: pricing.image_output_price ?? null,
+    per_request_price: null,
+    intervals: [],
+  }
+}
+
+export function applyDefaultPricingToChannels(
+  channels: UserAvailableChannel[],
+  pricingByModel: ReadonlyMap<string, ModelDefaultPricing>,
+): UserAvailableChannel[] {
+  return channels.map((channel) => ({
+    ...channel,
+    platforms: channel.platforms.map((section) => ({
+      ...section,
+      supported_models: section.supported_models.map((model) => ({
+        ...model,
+        pricing: model.pricing ?? toSupportedModelPricing(pricingByModel.get(model.name)),
+      })),
+    })),
+  }))
 }
