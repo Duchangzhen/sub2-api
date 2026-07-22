@@ -52,13 +52,15 @@
           <LocaleSwitcher />
 
           <!-- Doc Link -->
-          <router-link
-            to="/docs"
+          <a
+            :href="docUrl || '/docs'"
+            :target="docUrl ? '_blank' : undefined"
+            :rel="docUrl ? 'noopener noreferrer' : undefined"
             class="rounded-lg p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-dark-400 dark:hover:bg-dark-800 dark:hover:text-white"
             :title="t('home.viewDocs')"
           >
             <Icon name="book" size="md" />
-          </router-link>
+          </a>
 
           <!-- Theme Toggle -->
           <button
@@ -378,12 +380,14 @@
           &copy; {{ currentYear }} {{ siteName }}. {{ t('home.footer.allRightsReserved') }}
         </p>
         <div class="flex items-center gap-4">
-          <router-link
-            to="/docs"
+          <a
+            :href="docUrl || '/docs'"
+            :target="docUrl ? '_blank' : undefined"
+            :rel="docUrl ? 'noopener noreferrer' : undefined"
             class="text-sm text-gray-500 transition-colors hover:text-gray-700 dark:text-dark-400 dark:hover:text-white"
           >
             {{ t('home.docs') }}
-          </router-link>
+          </a>
           <a
             :href="githubUrl"
             target="_blank"
@@ -416,6 +420,7 @@ const siteName = computed(() => appStore.cachedPublicSettings?.site_name || appS
 const siteLogo = computed(() => sanitizeUrl(appStore.cachedPublicSettings?.site_logo || appStore.siteLogo || '', { allowRelative: true, allowDataUrl: true }))
 const siteSubtitle = computed(() => appStore.cachedPublicSettings?.site_subtitle?.trim() || '')
 const homeContent = computed(() => appStore.cachedPublicSettings?.home_content || '')
+const docUrl = computed(() => sanitizeUrl(appStore.cachedPublicSettings?.doc_url || appStore.docUrl || ''))
 
 // Check if homeContent is a URL (for iframe display)
 const isHomeContentUrl = computed(() => {

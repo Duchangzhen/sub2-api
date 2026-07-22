@@ -25,6 +25,7 @@ import (
 var (
 	ErrNoUpdateAvailable         = infraerrors.Conflict("ALREADY_UP_TO_DATE", "no update available; current version is latest")
 	ErrRollbackVersionNotAllowed = infraerrors.BadRequest("ROLLBACK_VERSION_NOT_ALLOWED", "version is not in the allowed rollback list")
+	ErrSelfUpdateUnsupported     = infraerrors.Conflict("SELF_UPDATE_UNSUPPORTED", "in-place updates are not supported on Render; update the Git repository and redeploy the service")
 )
 
 const (
@@ -79,13 +80,27 @@ func NewUpdateService(cache UpdateCache, githubClient GitHubReleaseClient, versi
 
 // UpdateInfo contains update information
 type UpdateInfo struct {
-	CurrentVersion string       `json:"current_version"`
-	LatestVersion  string       `json:"latest_version"`
-	HasUpdate      bool         `json:"has_update"`
-	ReleaseInfo    *ReleaseInfo `json:"release_info,omitempty"`
-	Cached         bool         `json:"cached"`
-	Warning        string       `json:"warning,omitempty"`
-	BuildType      string       `json:"build_type"` // "source" or "release"
+	CurrentVersion      string       `json:"current_version"`
+	LatestVersion       string       `json:"latest_version"`
+	HasUpdate           bool         `json:"has_update"`
+	ReleaseInfo         *ReleaseInfo `json:"release_info,omitempty"`
+	Cached              bool         `json:"cached"`
+	Warning             string       `json:"warning,omitempty"`
+	BuildType           string       `json:"build_type"` // "source" or "release"
+	DeploymentType      string       `json:"deployment_type"`
+	SelfUpdateSupported bool         `json:"self_update_supported"`
+}
+
+func deploymentCapabilities() (deploymentType string, selfUpdateSupported bool) {
+	if os.Getenv("RENDER") != "" || os.Getenv("RENDER_SERVICE_ID") != "" || os.Getenv("RENDER_EXTERNAL_HOSTNAME") != "" {
+		return "render", false
+	}
+	return "standalone", true
+}
+
+func (s *UpdateService) applyDeploymentCapabilities(info *UpdateInfo) *UpdateInfo {
+	info.DeploymentType, info.SelfUpdateSupported = deploymentCapabilities()
+	return info
 }
 
 // ReleaseInfo contains GitHub release details
@@ -146,13 +161,13 @@ func (s *UpdateService) CheckUpdate(ctx context.Context, force bool) (*UpdateInf
 			cached.Warning = "Using cached data: " + err.Error()
 			return cached, nil
 		}
-		return &UpdateInfo{
+		return s.applyDeploymentCapabilities(&UpdateInfo{
 			CurrentVersion: s.currentVersion,
 			LatestVersion:  s.currentVersion,
 			HasUpdate:      false,
 			Warning:        err.Error(),
 			BuildType:      s.buildType,
-		}, nil
+		}), nil
 	}
 
 	// Cache result
@@ -163,6 +178,10 @@ func (s *UpdateService) CheckUpdate(ctx context.Context, force bool) (*UpdateInf
 // PerformUpdate downloads and applies the update
 // Uses atomic file replacement pattern for safe in-place updates
 func (s *UpdateService) PerformUpdate(ctx context.Context) error {
+	if _, supported := deploymentCapabilities(); !supported {
+		return ErrSelfUpdateUnsupported
+	}
+
 	info, err := s.CheckUpdate(ctx, true)
 	if err != nil {
 		return err
@@ -281,6 +300,10 @@ func (s *UpdateService) applyReleaseAssets(ctx context.Context, releaseAssets []
 
 // Rollback restores the previous version
 func (s *UpdateService) Rollback() error {
+	if _, supported := deploymentCapabilities(); !supported {
+		return ErrSelfUpdateUnsupported
+	}
+
 	exePath, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("failed to get executable path: %w", err)
@@ -327,6 +350,10 @@ func (s *UpdateService) ListRollbackVersions(ctx context.Context) ([]RollbackVer
 // The target must be one of the versions returned by ListRollbackVersions;
 // anything else (including the current version) is rejected.
 func (s *UpdateService) RollbackToVersion(ctx context.Context, version string) error {
+	if _, supported := deploymentCapabilities(); !supported {
+		return ErrSelfUpdateUnsupported
+	}
+
 	target := strings.TrimPrefix(strings.TrimSpace(version), "v")
 	if target == "" {
 		return ErrRollbackVersionNotAllowed
@@ -416,7 +443,7 @@ func (s *UpdateService) fetchLatestRelease(ctx context.Context) (*UpdateInfo, er
 		}
 	}
 
-	return &UpdateInfo{
+	return s.applyDeploymentCapabilities(&UpdateInfo{
 		CurrentVersion: s.currentVersion,
 		LatestVersion:  latestVersion,
 		HasUpdate:      compareVersions(s.currentVersion, latestVersion) < 0,
@@ -429,7 +456,7 @@ func (s *UpdateService) fetchLatestRelease(ctx context.Context) (*UpdateInfo, er
 		},
 		Cached:    false,
 		BuildType: s.buildType,
-	}, nil
+	}), nil
 }
 
 func (s *UpdateService) downloadFile(ctx context.Context, downloadURL, dest string) error {
@@ -612,14 +639,14 @@ func (s *UpdateService) getFromCache(ctx context.Context) (*UpdateInfo, error) {
 		return nil, fmt.Errorf("cache expired")
 	}
 
-	return &UpdateInfo{
+	return s.applyDeploymentCapabilities(&UpdateInfo{
 		CurrentVersion: s.currentVersion,
 		LatestVersion:  cached.Latest,
 		HasUpdate:      compareVersions(s.currentVersion, cached.Latest) < 0,
 		ReleaseInfo:    cached.ReleaseInfo,
 		Cached:         true,
 		BuildType:      s.buildType,
-	}, nil
+	}), nil
 }
 
 func (s *UpdateService) saveToCache(ctx context.Context, info *UpdateInfo) {

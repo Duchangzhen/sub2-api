@@ -69,6 +69,27 @@ func TestUpdateServicePerformUpdateNoUpdateReturnsSentinel(t *testing.T) {
 	require.ErrorIs(t, err, ErrNoUpdateAvailable)
 }
 
+func TestUpdateServiceRenderDisablesInPlaceUpdates(t *testing.T) {
+	t.Setenv("RENDER", "true")
+	svc := NewUpdateService(
+		&updateServiceCacheStub{},
+		&updateServiceGitHubClientStub{
+			release: &GitHubRelease{TagName: "v0.1.163", Name: "v0.1.163"},
+		},
+		"0.1.162",
+		"release",
+	)
+
+	info, err := svc.CheckUpdate(context.Background(), true)
+	require.NoError(t, err)
+	require.Equal(t, "render", info.DeploymentType)
+	require.False(t, info.SelfUpdateSupported)
+	require.True(t, info.HasUpdate)
+	require.ErrorIs(t, svc.PerformUpdate(context.Background()), ErrSelfUpdateUnsupported)
+	require.ErrorIs(t, svc.Rollback(), ErrSelfUpdateUnsupported)
+	require.ErrorIs(t, svc.RollbackToVersion(context.Background(), "0.1.161"), ErrSelfUpdateUnsupported)
+}
+
 func newRollbackTestService(current string, releases []*GitHubRelease) *UpdateService {
 	return NewUpdateService(
 		&updateServiceCacheStub{},
