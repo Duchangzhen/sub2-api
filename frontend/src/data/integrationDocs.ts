@@ -14,6 +14,7 @@ export interface IntegrationDoc {
   title: string
   vendor: string
   mark: string
+  logoPlatform?: 'anthropic' | 'openai' | 'gemini'
   markClass: string
   description: string
   summary: string
@@ -58,7 +59,7 @@ export const commonFlow = [
 export function createIntegrationDocs(endpoints: DocEndpoints): IntegrationDoc[] {
   return [
     {
-      slug: 'claude-code', title: 'Claude Code', vendor: 'Anthropic', mark: 'A',
+      slug: 'claude-code', title: 'Claude Code', vendor: 'Anthropic', mark: 'A', logoPlatform: 'anthropic',
       markClass: 'bg-orange-50 text-orange-600 dark:bg-orange-950/40 dark:text-orange-300',
       description: 'Anthropic 官方 AI 编程助手，支持终端交互、代码分析、Git 工作流、项目级修改和多轮开发任务。',
       summary: '适合已经习惯 Claude 工作流的客户。本站兼容 Anthropic Messages 接口，Claude Code 请求会落到 /v1/messages。',
@@ -75,7 +76,7 @@ export function createIntegrationDocs(endpoints: DocEndpoints): IntegrationDoc[]
       ]
     },
     {
-      slug: 'codex', title: 'Codex CLI & App', vendor: 'OpenAI', mark: 'O',
+      slug: 'codex', title: 'Codex CLI & App', vendor: 'OpenAI', mark: 'O', logoPlatform: 'openai',
       markClass: 'bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-white',
       description: 'OpenAI 推出的编程智能体工具，可读取、修改和运行代码，支持多模型选择和本地开发协作。',
       summary: 'Codex 走 OpenAI 兼容接口，Base URL 使用 /v1，Key 使用你在本站 API Key 管理里创建的密钥。',
@@ -92,7 +93,7 @@ export function createIntegrationDocs(endpoints: DocEndpoints): IntegrationDoc[]
       ]
     },
     {
-      slug: 'gemini', title: 'Gemini CLI', vendor: 'Google', mark: 'G',
+      slug: 'gemini', title: 'Gemini CLI', vendor: 'Google', mark: 'G', logoPlatform: 'gemini',
       markClass: 'bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-300',
       description: 'Google 官方 Gemini 命令行工具，支持代码辅助、文件操作、上下文问答和多种安装方式。',
       summary: 'Gemini 原生请求使用 /v1beta/models 路径。支持自定义 Gemini Endpoint 的客户端填本站 /v1beta 地址。',

@@ -27,7 +27,10 @@
       <section class="mt-12 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
         <router-link v-for="doc in docs" :key="doc.slug" :to="`/docs/${doc.slug}`" class="doc-card group">
           <div class="flex items-start justify-between gap-4">
-            <span :class="['doc-mark', doc.markClass]">{{ doc.mark }}</span>
+            <span :class="['doc-mark', doc.markClass]">
+              <PlatformIcon v-if="doc.logoPlatform" :platform="doc.logoPlatform" size="lg" />
+              <span v-else>{{ doc.mark }}</span>
+            </span>
             <Icon name="arrowRight" size="md" class="text-gray-400 transition group-hover:translate-x-0.5 group-hover:text-gray-900 dark:group-hover:text-white" />
           </div>
           <div class="mt-6 min-w-0">
@@ -49,7 +52,10 @@
         </router-link>
         <header class="border-b border-gray-200 pb-8 dark:border-dark-800">
           <div class="flex items-start gap-5">
-            <span :class="['doc-mark', activeDoc.markClass]">{{ activeDoc.mark }}</span>
+            <span :class="['doc-mark', activeDoc.markClass]">
+              <PlatformIcon v-if="activeDoc.logoPlatform" :platform="activeDoc.logoPlatform" size="lg" />
+              <span v-else>{{ activeDoc.mark }}</span>
+            </span>
             <div class="min-w-0">
               <p class="text-sm font-semibold text-gray-500 dark:text-dark-400">{{ activeDoc.vendor }}</p>
               <h1 class="mt-2 break-words text-3xl font-bold sm:text-4xl">{{ activeDoc.title }}</h1>
@@ -115,6 +121,7 @@ import { useClipboard } from '@/composables/useClipboard'
 import { commonFlow, createIntegrationDocs } from '@/data/integrationDocs'
 import Icon from '@/components/icons/Icon.vue'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
+import PlatformIcon from '@/components/common/PlatformIcon.vue'
 
 const route = useRoute()
 const appStore = useAppStore()
